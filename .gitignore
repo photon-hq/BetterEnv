@@ -1,0 +1,17 @@
+# Build artifacts
+.build/
+.swiftpm/
+*.xcodeproj
+xcuserdata/
+DerivedData/
+
+# Environment files (may contain secrets)
+.env
+.env.local
+.env.*.local
+
+# Keep example file
+!.env.example
+
+# macOS
+.DS_Store
