@@ -116,4 +116,4 @@ Environment variables from `.env` files are embedded in your compiled binary. Ma
 
 ## License
 
-MIT
+MIT (Photon)
