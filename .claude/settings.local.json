@@ -3,7 +3,9 @@
     "allow": [
       "Bash(swift build:*)",
       "Bash(swift test:*)",
-      "Bash(swift package clean:*)"
+      "Bash(swift package clean:*)",
+      "mcp__acp__Bash",
+      "mcp__acp__Edit"
     ]
   }
 }

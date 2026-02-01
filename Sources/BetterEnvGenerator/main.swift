@@ -182,6 +182,13 @@ struct EnvGenerator {
                 return ProcessInfo.processInfo.environment[key]
             }
 
+            /// Access an environment variable only from the runtime environment, ignoring compile-time values.
+            /// - Parameter key: The environment variable name
+            /// - Returns: The runtime value if found, nil otherwise
+            public static func runtimeGet(_ key: String) -> String? {
+                return ProcessInfo.processInfo.environment[key]
+            }
+
             /// Check if an environment variable exists.
             /// - Parameter key: The environment variable name
             /// - Returns: true if the key exists in either compile-time or runtime environment
