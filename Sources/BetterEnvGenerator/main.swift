@@ -133,6 +133,7 @@ struct EnvGenerator {
         // Regenerate by rebuilding your target.
 
         import Foundation
+        import BetterEnvCore
 
         /// A namespace for accessing environment variables.
         /// Uses compile-time generated values first, then falls back to runtime environment.
@@ -157,11 +158,14 @@ struct EnvGenerator {
 
         code += """
 
+            // MARK: - Sync API (compile-time + runtime only)
+
             /// Access an environment variable by key.
             /// - Parameter key: The environment variable name
             /// - Returns: The value of the environment variable
             /// - Note: First checks compile-time values from .env files, then runtime ProcessInfo.
             ///         Triggers fatalError if the key is not found in either.
+            ///         Does NOT check providers - use async `get(_:)` for that.
             public static subscript(_ key: String) -> String {
                 if let value = compiled[key] {
                     return value
@@ -175,6 +179,7 @@ struct EnvGenerator {
             /// Safely access an environment variable, returning nil if not found.
             /// - Parameter key: The environment variable name
             /// - Returns: The value if found, nil otherwise
+            /// - Note: Does NOT check providers - use async `get(_:)` for that.
             public static func get(_ key: String) -> String? {
                 if let value = compiled[key] {
                     return value
@@ -189,9 +194,10 @@ struct EnvGenerator {
                 return ProcessInfo.processInfo.environment[key]
             }
 
-            /// Check if an environment variable exists.
+            /// Check if an environment variable exists (compile-time or runtime only).
             /// - Parameter key: The environment variable name
             /// - Returns: true if the key exists in either compile-time or runtime environment
+            /// - Note: Does NOT check providers - use async `has(_:)` for that.
             public static func has(_ key: String) -> Bool {
                 return compiled[key] != nil
                     || ProcessInfo.processInfo.environment[key] != nil
@@ -203,11 +209,73 @@ struct EnvGenerator {
             }
 
             /// Get all available environment variables (compile-time + runtime, compile-time takes precedence).
+            /// - Note: Does NOT include provider values - use async `all()` for that.
             public static var all: [String: String] {
                 var result = ProcessInfo.processInfo.environment
                 for (key, value) in compiled {
                     result[key] = value
                 }
+                return result
+            }
+
+            // MARK: - Provider Management
+
+            /// Add a provider for fetching environment variables at runtime.
+            /// Providers are queried in order: first added = highest priority.
+            /// Provider values take precedence over compiled and runtime values.
+            /// - Parameter provider: The provider to add
+            public static func addProvider(_ provider: BetterEnvProvider) async {
+                await BetterEnvRuntime.shared.addProvider(provider)
+            }
+
+            /// Remove all registered providers.
+            public static func removeAllProviders() async {
+                await BetterEnvRuntime.shared.removeAllProviders()
+            }
+
+            // MARK: - Async API (includes providers)
+
+            /// Asynchronously get an environment variable, checking all sources.
+            /// Resolution order: Providers (in order added) → Compiled → Runtime
+            /// - Parameter key: The environment variable name
+            /// - Returns: The value if found, nil otherwise
+            public static func get(_ key: String) async throws -> String? {
+                // Check providers first (highest priority)
+                if let value = try await BetterEnvRuntime.shared.getFromProviders(key) {
+                    return value
+                }
+                // Fall back to compiled
+                if let value = compiled[key] {
+                    return value
+                }
+                // Fall back to runtime
+                return ProcessInfo.processInfo.environment[key]
+            }
+
+            /// Asynchronously check if an environment variable exists in any source.
+            /// - Parameter key: The environment variable name
+            /// - Returns: true if the key exists in providers, compile-time, or runtime environment
+            public static func has(_ key: String) async throws -> Bool {
+                return try await get(key) != nil
+            }
+
+            /// Asynchronously get all environment variables from all sources.
+            /// Resolution order: Providers (in order added) → Compiled → Runtime
+            /// - Returns: Merged dictionary of all values
+            public static func all() async throws -> [String: String] {
+                var result = ProcessInfo.processInfo.environment
+                
+                // Layer compiled on top
+                for (key, value) in compiled {
+                    result[key] = value
+                }
+                
+                // Layer provider values on top (highest priority)
+                let providerValues = try await BetterEnvRuntime.shared.getAllFromProviders()
+                for (key, value) in providerValues {
+                    result[key] = value
+                }
+                
                 return result
             }
         }

@@ -14,9 +14,30 @@ let package = Package(
         .plugin(
             name: "BetterEnvPlugin",
             targets: ["BetterEnvPlugin"]
+        ),
+        // Core library with provider protocol and runtime
+        .library(
+            name: "BetterEnvCore",
+            targets: ["BetterEnvCore"]
+        ),
+        // Infisical provider
+        .library(
+            name: "BetterEnvInfisical",
+            targets: ["BetterEnvInfisical"]
         )
     ],
     targets: [
+        // Core library with provider protocol and runtime support
+        .target(
+            name: "BetterEnvCore"
+        ),
+
+        // Infisical provider implementation
+        .target(
+            name: "BetterEnvInfisical",
+            dependencies: ["BetterEnvCore"]
+        ),
+
         // Build tool plugin that generates the entire BetterEnv enum
         .plugin(
             name: "BetterEnvPlugin",
@@ -32,6 +53,7 @@ let package = Package(
         // Tests - applies the plugin to test the generated code
         .testTarget(
             name: "BetterEnvTests",
+            dependencies: ["BetterEnvCore"],
             plugins: [.plugin(name: "BetterEnvPlugin")]
         )
     ]
