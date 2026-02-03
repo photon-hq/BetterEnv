@@ -2,13 +2,13 @@ import Foundation
 
 /// Runtime provider management for BetterEnv.
 ///
-/// This actor manages async providers and provides thread-safe access to environment variables
-/// from multiple sources (providers, compiled values, and runtime environment).
-public actor BetterEnvRuntime {
+/// Thread-safe storage for providers with async access for fetching values.
+public final class BetterEnvRuntime: @unchecked Sendable {
     /// Shared singleton instance
     public static let shared = BetterEnvRuntime()
     
     private var providers: [BetterEnvProvider] = []
+    private let lock = NSLock()
     
     private init() {}
     
@@ -16,11 +16,15 @@ public actor BetterEnvRuntime {
     /// Providers are queried in order: first added = highest priority.
     /// - Parameter provider: The provider to add
     public func addProvider(_ provider: BetterEnvProvider) {
+        lock.lock()
+        defer { lock.unlock() }
         providers.append(provider)
     }
     
     /// Remove all providers.
     public func removeAllProviders() {
+        lock.lock()
+        defer { lock.unlock() }
         providers.removeAll()
     }
     
@@ -28,7 +32,8 @@ public actor BetterEnvRuntime {
     /// - Parameter key: The environment variable name
     /// - Returns: The value if found in any provider, nil otherwise
     public func getFromProviders(_ key: String) async throws -> String? {
-        for provider in providers {
+        let currentProviders = lock.withLock { providers }
+        for provider in currentProviders {
             if let value = try await provider.get(key) {
                 return value
             }
@@ -40,10 +45,11 @@ public actor BetterEnvRuntime {
     /// Earlier providers take precedence over later ones.
     /// - Returns: Merged dictionary of all provider values
     public func getAllFromProviders() async throws -> [String: String] {
+        let currentProviders = lock.withLock { providers }
         var result: [String: String] = [:]
         
         // Iterate in reverse so earlier providers override later ones
-        for provider in providers.reversed() {
+        for provider in currentProviders.reversed() {
             let values = try await provider.getAll()
             for (key, value) in values {
                 result[key] = value
@@ -55,6 +61,6 @@ public actor BetterEnvRuntime {
     
     /// Check if any providers are registered.
     public var hasProviders: Bool {
-        !providers.isEmpty
+        lock.withLock { !providers.isEmpty }
     }
 }

@@ -224,13 +224,13 @@ struct EnvGenerator {
             /// Providers are queried in order: first added = highest priority.
             /// Provider values take precedence over compiled and runtime values.
             /// - Parameter provider: The provider to add
-            public static func addProvider(_ provider: BetterEnvProvider) async {
-                await BetterEnvRuntime.shared.addProvider(provider)
+            public static func addProvider(_ provider: BetterEnvProvider) {
+                BetterEnvRuntime.shared.addProvider(provider)
             }
 
             /// Remove all registered providers.
-            public static func removeAllProviders() async {
-                await BetterEnvRuntime.shared.removeAllProviders()
+            public static func removeAllProviders() {
+                BetterEnvRuntime.shared.removeAllProviders()
             }
 
             // MARK: - Async API (includes providers)

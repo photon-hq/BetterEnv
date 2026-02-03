@@ -120,8 +120,8 @@ Fetch secrets from [Infisical](https://infisical.com) using Universal Auth.
 ```swift
 import BetterEnvInfisical
 
-// Configure at app startup
-await BetterEnv.addProvider(InfisicalProvider(
+// Configure at app startup (sync)
+BetterEnv.addProvider(InfisicalProvider(
     url: "https://your-infisical-instance.com",  // or https://app.infisical.com
     clientId: clientId,
     clientSecret: clientSecret,
@@ -157,7 +157,7 @@ public struct MyProvider: BetterEnvProvider {
 }
 
 // Register
-await BetterEnv.addProvider(MyProvider())
+BetterEnv.addProvider(MyProvider())
 ```
 
 ### Sync vs Async API
