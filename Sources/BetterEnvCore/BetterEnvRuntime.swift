@@ -7,7 +7,7 @@ public final class BetterEnvRuntime: @unchecked Sendable {
     /// Shared singleton instance
     public static let shared = BetterEnvRuntime()
     
-    private var providers: [BetterEnvProvider] = []
+    private var providers: [any BetterEnvProvider] = []
     private let lock = NSLock()
     
     private init() {}
@@ -15,7 +15,7 @@ public final class BetterEnvRuntime: @unchecked Sendable {
     /// Add a provider to the runtime.
     /// Providers are queried in order: first added = highest priority.
     /// - Parameter provider: The provider to add
-    public func addProvider(_ provider: BetterEnvProvider) {
+    public func addProvider(_ provider: any BetterEnvProvider) {
         lock.lock()
         defer { lock.unlock() }
         providers.append(provider)
@@ -26,6 +26,15 @@ public final class BetterEnvRuntime: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         providers.removeAll()
+    }
+    
+    /// Get a provider by type.
+    /// - Parameter type: The provider type to find
+    /// - Returns: The provider if found, nil otherwise
+    public func getProvider<T: BetterEnvProvider>(_ type: T.Type) -> T? {
+        lock.withLock {
+            providers.first { $0 is T } as? T
+        }
     }
     
     /// Get a value from providers only.

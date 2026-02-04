@@ -50,26 +50,27 @@ DEBUG=true
 ### Access environment variables
 
 ```swift
-// No import needed - BetterEnv is generated into your module
+// Subscript access (Compile → Runtime, fatalError if not found)
+let apiKey = BetterEnv["API_KEY"]                  // String
 
-// Subscript access (fatal error if not found)
-let apiKey = BetterEnv["API_KEY"]
+// Compile-time values (from .env files)
+let apiKey = BetterEnv.compile.get("API_KEY")      // String?
+let all = BetterEnv.compile.getAll()               // [String: String]
+let exists = BetterEnv.compile.has("API_KEY")      // Bool
 
-// Safe access (returns nil if not found)
-if let debug = BetterEnv.get("DEBUG") {
-    print("Debug mode: \(debug)")
-}
+// Runtime values (from ProcessInfo)
+let path = BetterEnv.runtime.get("PATH")           // String?
+let all = BetterEnv.runtime.getAll()               // [String: String]
+let exists = BetterEnv.runtime.has("PATH")         // Bool
 
-// Check if a key exists
-if BetterEnv.has("API_KEY") {
-    // ...
-}
+// Provider values (type-specific)
+let secret = try await BetterEnv.provider(InfisicalProvider.self).get("DB_PASSWORD")  // String?
+let all = try await BetterEnv.provider(InfisicalProvider.self).getAll()               // [String: String]
 
-// Get all compile-time variables
-let compiled = BetterEnv.compiledEnvironment
-
-// Get all variables (compile-time + runtime)
-let all = BetterEnv.all
+// Combined access (All Providers → Compile → Runtime)
+let value = try await BetterEnv.get("KEY")         // String?
+let all = try await BetterEnv.getAll()             // [String: String]
+let exists = try await BetterEnv.has("KEY")        // Bool
 ```
 
 ### Variable Substitution
@@ -120,9 +121,9 @@ Fetch secrets from [Infisical](https://infisical.com) using Universal Auth.
 ```swift
 import BetterEnvInfisical
 
-// Configure at app startup (sync)
+// Register provider at app startup
 BetterEnv.addProvider(InfisicalProvider(
-    url: "https://your-infisical-instance.com",  // or https://app.infisical.com
+    url: "https://your-infisical-instance.com",
     clientId: clientId,
     clientSecret: clientSecret,
     project: "your-project-id",
@@ -130,14 +131,12 @@ BetterEnv.addProvider(InfisicalProvider(
     secretPath: "/"  // optional, defaults to "/"
 ))
 
-// Fetch secrets (async)
+// Fetch from this specific provider
+let dbPassword = try await BetterEnv.provider(InfisicalProvider.self).get("DB_PASSWORD")
+
+// Fetch from all sources (All Providers → Compile → Runtime)
 let dbPassword = try await BetterEnv.get("DB_PASSWORD")
-
-// Get all secrets from all sources
-let allSecrets = try await BetterEnv.all()
 ```
-
-**Resolution order**: Providers (first added = highest priority) -> Compiled (.env) -> Runtime (ProcessInfo)
 
 ### Custom Providers
 
@@ -158,16 +157,20 @@ public struct MyProvider: BetterEnvProvider {
 
 // Register
 BetterEnv.addProvider(MyProvider())
+
+// Access
+let value = try await BetterEnv.provider(MyProvider.self).get("KEY")
 ```
 
-### Sync vs Async API
+### API Summary
 
-| Method | Checks Providers | Async |
-|--------|-----------------|-------|
-| `BetterEnv["KEY"]` | No | No |
-| `BetterEnv.get("KEY")` | No | No |
-| `try await BetterEnv.get("KEY")` | Yes | Yes |
-| `try await BetterEnv.all()` | Yes | Yes |
+| Namespace | Methods | Async |
+|-----------|---------|-------|
+| `BetterEnv[key]` | subscript | No (Compile → Runtime) |
+| `BetterEnv.compile` | `get`, `getAll`, `has` | No |
+| `BetterEnv.runtime` | `get`, `getAll`, `has` | No |
+| `BetterEnv.provider(T.self)` | `get`, `getAll` | Yes |
+| `BetterEnv` | `get`, `getAll`, `has`, `addProvider`, `removeAllProviders` | Yes (get/getAll/has) |
 
 ## Security Note
 

@@ -158,14 +158,13 @@ struct EnvGenerator {
 
         code += """
 
-            // MARK: - Sync API (compile-time + runtime only)
+            // MARK: - Subscript Access (Compile → Runtime)
 
             /// Access an environment variable by key.
+            /// Resolution order: Compiled → Runtime (does NOT check providers)
             /// - Parameter key: The environment variable name
             /// - Returns: The value of the environment variable
-            /// - Note: First checks compile-time values from .env files, then runtime ProcessInfo.
-            ///         Triggers fatalError if the key is not found in either.
-            ///         Does NOT check providers - use async `get(_:)` for that.
+            /// - Note: Triggers fatalError if the key is not found.
             public static subscript(_ key: String) -> String {
                 if let value = compiled[key] {
                     return value
@@ -173,59 +172,60 @@ struct EnvGenerator {
                 if let value = ProcessInfo.processInfo.environment[key] {
                     return value
                 }
-                fatalError("BetterEnv: Environment variable '\\(key)' not found. Check your .env files or system environment.")
+                fatalError("BetterEnv: Environment variable '\\(key)' not found.")
             }
 
-            /// Safely access an environment variable, returning nil if not found.
-            /// - Parameter key: The environment variable name
-            /// - Returns: The value if found, nil otherwise
-            /// - Note: Does NOT check providers - use async `get(_:)` for that.
-            public static func get(_ key: String) -> String? {
-                if let value = compiled[key] {
-                    return value
+            // MARK: - Compile-time Access
+
+            /// Access compile-time environment variables from .env files.
+            public enum compile {
+                /// Get a compile-time environment variable.
+                /// - Parameter key: The environment variable name
+                /// - Returns: The value if found, nil otherwise
+                public static func get(_ key: String) -> String? {
+                    compiled[key]
                 }
-                return ProcessInfo.processInfo.environment[key]
-            }
 
-            /// Access an environment variable only from the runtime environment, ignoring compile-time values.
-            /// - Parameter key: The environment variable name
-            /// - Returns: The runtime value if found, nil otherwise
-            public static func runtimeGet(_ key: String) -> String? {
-                return ProcessInfo.processInfo.environment[key]
-            }
-
-            /// Check if an environment variable exists (compile-time or runtime only).
-            /// - Parameter key: The environment variable name
-            /// - Returns: true if the key exists in either compile-time or runtime environment
-            /// - Note: Does NOT check providers - use async `has(_:)` for that.
-            public static func has(_ key: String) -> Bool {
-                return compiled[key] != nil
-                    || ProcessInfo.processInfo.environment[key] != nil
-            }
-
-            /// Get all compile-time environment variables.
-            public static var compiledEnvironment: [String: String] {
-                compiled
-            }
-
-            /// Get all available environment variables (compile-time + runtime, compile-time takes precedence).
-            /// - Note: Does NOT include provider values - use async `all()` for that.
-            public static var all: [String: String] {
-                var result = ProcessInfo.processInfo.environment
-                for (key, value) in compiled {
-                    result[key] = value
+                /// Get all compile-time environment variables.
+                public static func getAll() -> [String: String] {
+                    compiled
                 }
-                return result
+
+                /// Check if a key exists in compile-time environment.
+                public static func has(_ key: String) -> Bool {
+                    compiled[key] != nil
+                }
             }
 
-            // MARK: - Provider Management
+            // MARK: - Runtime Access
 
-            /// Add a provider for fetching environment variables at runtime.
+            /// Access runtime environment variables from ProcessInfo.
+            public enum runtime {
+                /// Get a runtime environment variable.
+                /// - Parameter key: The environment variable name
+                /// - Returns: The value if found, nil otherwise
+                public static func get(_ key: String) -> String? {
+                    ProcessInfo.processInfo.environment[key]
+                }
+
+                /// Get all runtime environment variables.
+                public static func getAll() -> [String: String] {
+                    ProcessInfo.processInfo.environment
+                }
+
+                /// Check if a key exists in runtime environment.
+                public static func has(_ key: String) -> Bool {
+                    ProcessInfo.processInfo.environment[key] != nil
+                }
+            }
+
+            // MARK: - Provider Access
+
+            /// Add a provider for fetching environment variables.
             /// Providers are queried in order: first added = highest priority.
-            /// Provider values take precedence over compiled and runtime values.
-            /// - Parameter provider: The provider to add
-            public static func addProvider(_ provider: BetterEnvProvider) {
-                BetterEnvRuntime.shared.addProvider(provider)
+            /// - Parameter p: The provider to add
+            public static func addProvider(_ p: any BetterEnvProvider) {
+                BetterEnvRuntime.shared.addProvider(p)
             }
 
             /// Remove all registered providers.
@@ -233,50 +233,72 @@ struct EnvGenerator {
                 BetterEnvRuntime.shared.removeAllProviders()
             }
 
-            // MARK: - Async API (includes providers)
+            /// Access a specific provider by type.
+            /// - Parameter type: The provider type to access
+            /// - Returns: A typed accessor for the provider
+            public static func provider<T: BetterEnvProvider>(_ type: T.Type) -> ProviderAccessor<T> {
+                ProviderAccessor(type: type)
+            }
 
-            /// Asynchronously get an environment variable, checking all sources.
-            /// Resolution order: Providers (in order added) → Compiled → Runtime
+            /// Accessor for a specific provider type.
+            public struct ProviderAccessor<T: BetterEnvProvider> {
+                let type: T.Type
+
+                /// Get an environment variable from this provider.
+                /// - Parameter key: The environment variable name
+                /// - Returns: The value if found, nil otherwise
+                public func get(_ key: String) async throws -> String? {
+                    guard let provider = BetterEnvRuntime.shared.getProvider(type) else {
+                        return nil
+                    }
+                    return try await provider.get(key)
+                }
+
+                /// Get all environment variables from this provider.
+                /// - Returns: Dictionary of all values from this provider
+                public func getAll() async throws -> [String: String] {
+                    guard let provider = BetterEnvRuntime.shared.getProvider(type) else {
+                        return [:]
+                    }
+                    return try await provider.getAll()
+                }
+            }
+
+            // MARK: - Combined Access
+
+            /// Get an environment variable, checking all sources.
+            /// Resolution order: Providers → Compiled → Runtime
             /// - Parameter key: The environment variable name
             /// - Returns: The value if found, nil otherwise
             public static func get(_ key: String) async throws -> String? {
-                // Check providers first (highest priority)
                 if let value = try await BetterEnvRuntime.shared.getFromProviders(key) {
                     return value
                 }
-                // Fall back to compiled
-                if let value = compiled[key] {
+                if let value = compile.get(key) {
                     return value
                 }
-                // Fall back to runtime
-                return ProcessInfo.processInfo.environment[key]
+                return runtime.get(key)
             }
 
-            /// Asynchronously check if an environment variable exists in any source.
-            /// - Parameter key: The environment variable name
-            /// - Returns: true if the key exists in providers, compile-time, or runtime environment
-            public static func has(_ key: String) async throws -> Bool {
-                return try await get(key) != nil
-            }
-
-            /// Asynchronously get all environment variables from all sources.
-            /// Resolution order: Providers (in order added) → Compiled → Runtime
+            /// Get all environment variables from all sources.
+            /// Resolution order: Providers → Compiled → Runtime
             /// - Returns: Merged dictionary of all values
-            public static func all() async throws -> [String: String] {
-                var result = ProcessInfo.processInfo.environment
-                
-                // Layer compiled on top
-                for (key, value) in compiled {
+            public static func getAll() async throws -> [String: String] {
+                var result = runtime.getAll()
+                for (key, value) in compile.getAll() {
                     result[key] = value
                 }
-                
-                // Layer provider values on top (highest priority)
-                let providerValues = try await BetterEnvRuntime.shared.getAllFromProviders()
-                for (key, value) in providerValues {
+                for (key, value) in try await BetterEnvRuntime.shared.getAllFromProviders() {
                     result[key] = value
                 }
-                
                 return result
+            }
+
+            /// Check if a key exists in any source.
+            /// - Parameter key: The environment variable name
+            /// - Returns: true if the key exists in any source
+            public static func has(_ key: String) async throws -> Bool {
+                try await get(key) != nil
             }
         }
 
