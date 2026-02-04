@@ -27,8 +27,9 @@ Apply the plugin to your target:
 .target(
     name: "YourTarget",
     dependencies: [
+        // Required for providers (FileProvider, etc.)
         .product(name: "BetterEnvCore", package: "BetterEnv"),
-        // Add if using Infisical:
+        // Only if using Infisical:
         .product(name: "BetterEnvInfisical", package: "BetterEnv"),
     ],
     plugins: [.plugin(name: "BetterEnvPlugin", package: "BetterEnv")]
