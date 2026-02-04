@@ -114,6 +114,23 @@ Since the `BetterEnv` enum is generated at build time, your IDE may show errors 
 
 Providers allow you to fetch secrets at runtime from external sources. This is useful when credentials are only available at runtime.
 
+### File Provider
+
+Read environment variables from a specific `.env` file at runtime.
+
+```swift
+import BetterEnvCore
+
+// Absolute path
+BetterEnv.addProvider(FileProvider(path: "/path/to/.env.production"))
+
+// Relative to current directory
+BetterEnv.addProvider(FileProvider.relative(".env.secrets"))
+
+// Access
+let secret = try await BetterEnv.provider(FileProvider.self).get("API_KEY")
+```
+
 ### Infisical Provider
 
 Fetch secrets from [Infisical](https://infisical.com) using Universal Auth.
