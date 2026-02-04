@@ -127,13 +127,12 @@ public actor InfisicalProvider: BetterEnvProvider {
     private func fetchSecrets() async throws -> [String: String] {
         let token = try await getAccessToken()
         
-        var components = URLComponents(string: "\(url)/api/v4/secrets")!
+        // Use v3 API for broader compatibility with self-hosted instances
+        var components = URLComponents(string: "\(url)/api/v3/secrets/raw")!
         components.queryItems = [
-            URLQueryItem(name: "projectId", value: project),
+            URLQueryItem(name: "workspaceId", value: project),
             URLQueryItem(name: "environment", value: environment),
-            URLQueryItem(name: "secretPath", value: secretPath),
-            URLQueryItem(name: "viewSecretValue", value: "true"),
-            URLQueryItem(name: "expandSecretReferences", value: "true")
+            URLQueryItem(name: "secretPath", value: secretPath)
         ]
         
         var request = URLRequest(url: components.url!)
