@@ -68,13 +68,16 @@ struct EnvGenerator {
                 continue
             }
 
+            // Strip optional "export " prefix
+            let line = trimmed.hasPrefix("export ") ? String(trimmed.dropFirst(7)) : trimmed
+
             // Parse KEY=VALUE
-            guard let equalIndex = trimmed.firstIndex(of: "=") else {
+            guard let equalIndex = line.firstIndex(of: "=") else {
                 continue
             }
 
-            let key = String(trimmed[..<equalIndex]).trimmingCharacters(in: .whitespaces)
-            var value = String(trimmed[trimmed.index(after: equalIndex)...]).trimmingCharacters(in: .whitespaces)
+            let key = String(line[..<equalIndex]).trimmingCharacters(in: .whitespaces)
+            var value = String(line[line.index(after: equalIndex)...]).trimmingCharacters(in: .whitespaces)
 
             // Remove surrounding quotes if present
             if (value.hasPrefix("\"") && value.hasSuffix("\"")) ||
@@ -136,7 +139,7 @@ struct EnvGenerator {
         import BetterEnvCore
 
         /// A namespace for accessing environment variables.
-        /// Uses compile-time generated values first, then falls back to runtime environment.
+        /// Resolution order: Runtime → Compiled for subscript, Providers → Runtime → Compiled for combined access.
         public enum BetterEnv {
             /// Compile-time environment values from .env files.
 
@@ -314,7 +317,7 @@ struct EnvGenerator {
             // MARK: - Combined Access
 
             /// Get an environment variable, checking all sources.
-            /// Resolution order: Sync Providers → Async Providers → Compiled → Runtime
+            /// Resolution order: Providers → Runtime → Compiled
             /// - Parameter key: The environment variable name
             /// - Returns: The value if found, nil otherwise
             public static func get(_ key: String) async throws -> String? {
@@ -324,18 +327,18 @@ struct EnvGenerator {
                 if let value = try await BetterEnvRuntime.shared.getFromAsyncProviders(key) {
                     return value
                 }
-                if let value = compile.get(key) {
+                if let value = runtime.get(key) {
                     return value
                 }
-                return runtime.get(key)
+                return compile.get(key)
             }
 
             /// Get all environment variables from all sources.
-            /// Resolution order: Sync Providers → Async Providers → Compiled → Runtime
+            /// Resolution order: Providers → Runtime → Compiled
             /// - Returns: Merged dictionary of all values
             public static func getAll() async throws -> [String: String] {
-                var result = runtime.getAll()
-                for (key, value) in compile.getAll() {
+                var result = compile.getAll()
+                for (key, value) in runtime.getAll() {
                     result[key] = value
                 }
                 for (key, value) in try BetterEnvRuntime.shared.getAllFromProviders() {

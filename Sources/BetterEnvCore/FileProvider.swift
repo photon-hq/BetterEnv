@@ -46,13 +46,16 @@ public struct FileProvider: BetterEnvProvider, Sendable {
                 continue
             }
 
+            // Strip optional "export " prefix
+            let line = trimmed.hasPrefix("export ") ? String(trimmed.dropFirst(7)) : trimmed
+
             // Parse KEY=VALUE
-            guard let equalIndex = trimmed.firstIndex(of: "=") else {
+            guard let equalIndex = line.firstIndex(of: "=") else {
                 continue
             }
 
-            let key = String(trimmed[..<equalIndex]).trimmingCharacters(in: .whitespaces)
-            var value = String(trimmed[trimmed.index(after: equalIndex)...]).trimmingCharacters(in: .whitespaces)
+            let key = String(line[..<equalIndex]).trimmingCharacters(in: .whitespaces)
+            var value = String(line[line.index(after: equalIndex)...]).trimmingCharacters(in: .whitespaces)
 
             // Remove surrounding quotes if present
             if (value.hasPrefix("\"") && value.hasSuffix("\"")) ||
