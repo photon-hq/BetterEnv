@@ -5,7 +5,13 @@
       "Bash(swift test:*)",
       "Bash(swift package clean:*)",
       "mcp__acp__Bash",
-      "mcp__acp__Edit"
+      "mcp__acp__Edit",
+      "Bash(git remote:*)",
+      "Bash(gt log:*)",
+      "Bash(echo \"exit:$?\")",
+      "Bash(gh pr:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }
