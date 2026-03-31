@@ -122,10 +122,11 @@ public final class BetterEnvRuntime: @unchecked Sendable {
     }
 
     /// Get all values from all providers (sync and async), merged.
+    /// Sync providers take precedence over async providers.
     /// - Returns: Merged dictionary of all provider values
     public func getAllFromAllProviders() async throws -> [String: String] {
-        var result = try getAllFromProviders()
-        for (key, value) in try await getAllFromAsyncProviders() {
+        var result = try await getAllFromAsyncProviders()
+        for (key, value) in try getAllFromProviders() {
             result[key] = value
         }
         return result

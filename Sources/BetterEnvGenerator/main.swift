@@ -341,10 +341,10 @@ struct EnvGenerator {
                 for (key, value) in runtime.getAll() {
                     result[key] = value
                 }
-                for (key, value) in try BetterEnvRuntime.shared.getAllFromProviders() {
+                for (key, value) in try await BetterEnvRuntime.shared.getAllFromAsyncProviders() {
                     result[key] = value
                 }
-                for (key, value) in try await BetterEnvRuntime.shared.getAllFromAsyncProviders() {
+                for (key, value) in try BetterEnvRuntime.shared.getAllFromProviders() {
                     result[key] = value
                 }
                 return result
