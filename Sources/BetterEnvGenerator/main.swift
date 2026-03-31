@@ -184,7 +184,7 @@ struct EnvGenerator {
             let propertyName = key
             let escapedKey = escapeString(key)
             code += "            /// Compile-time value for `\(escapedKey)`\n"
-            code += "            public static var \(propertyName): String? { compiled[\"\(escapedKey)\"] }\n\n"
+            code += "            public static var \(propertyName): String { compiled[\"\(escapedKey)\"]! }\n\n"
         }
 
         code += """
