@@ -5,7 +5,7 @@ A Swift Package Manager build tool plugin that embeds environment variables at c
 ## Features
 
 - **Compile-time embedding**: Reads `.env` files during build and generates Swift code
-- **Runtime fallback**: Falls back to `ProcessInfo.processInfo.environment` if not found at compile time
+- **Runtime fallback**: Falls back to compiled values if not found in runtime environment
 - **Variable substitution**: Supports `${VAR}` syntax in `.env` files
 - **Multiple env files**: Supports `.env`, `.env.local`, `.env.development`, `.env.production`
 - **Type-safe access**: Use `BetterEnv["KEY"]` with subscript syntax
@@ -46,15 +46,19 @@ Create a `.env` file in your package root (same directory as `Package.swift`):
 API_KEY=your_secret_key
 API_URL=https://api.example.com
 DEBUG=true
+
+# "export" prefix is also supported (for shell compatibility)
+export SECRET_KEY=your_other_key
 ```
 
 ### Access environment variables
 
 ```swift
-// Subscript access (Compile → Runtime, fatalError if not found)
-let apiKey = BetterEnv["API_KEY"]                  // String
+// Subscript access (Runtime → Compile, returns nil if not found)
+let apiKey = BetterEnv["API_KEY"]                  // String?
 
 // Compile-time values (from .env files)
+let apiKey = BetterEnv.compile.API_KEY             // String (generated property)
 let apiKey = BetterEnv.compile.get("API_KEY")      // String?
 let all = BetterEnv.compile.getAll()               // [String: String]
 let exists = BetterEnv.compile.has("API_KEY")      // Bool
@@ -64,11 +68,15 @@ let path = BetterEnv.runtime.get("PATH")           // String?
 let all = BetterEnv.runtime.getAll()               // [String: String]
 let exists = BetterEnv.runtime.has("PATH")         // Bool
 
-// Provider values (type-specific)
-let secret = try await BetterEnv.provider(InfisicalProvider.self).get("DB_PASSWORD")  // String?
-let all = try await BetterEnv.provider(InfisicalProvider.self).getAll()               // [String: String]
+// Sync provider values (e.g., FileProvider)
+let secret = try BetterEnv.provider(FileProvider.self).get("API_KEY")            // String?
+let all = try BetterEnv.provider(FileProvider.self).getAll()                     // [String: String]
 
-// Combined access (All Providers → Compile → Runtime)
+// Async provider values (e.g., InfisicalProvider)
+let secret = try await BetterEnv.provider(InfisicalProvider.self).get("SECRET")  // String?
+let all = try await BetterEnv.provider(InfisicalProvider.self).getAll()          // [String: String]
+
+// Combined access (Providers → Runtime → Compile)
 let value = try await BetterEnv.get("KEY")         // String?
 let all = try await BetterEnv.getAll()             // [String: String]
 let exists = try await BetterEnv.has("KEY")        // Bool
@@ -100,12 +108,12 @@ BetterEnv reads these files in order (later files override earlier ones):
 1. **Build Time**: The `BetterEnvPlugin` runs during the build process
 2. **Generation**: It reads your `.env` files and generates a `BetterEnv.swift` file with all values embedded
 3. **Compilation**: The generated code is compiled into your module
-4. **Runtime**: `BetterEnv["KEY"]` first checks the compiled values, then falls back to runtime environment
+4. **Runtime**: `BetterEnv["KEY"]` first checks runtime environment, then falls back to compiled values
 
 This means:
 - Secrets from `.env` files are embedded in your binary at compile time
-- You can override values at runtime via system environment variables
-- Missing keys cause a `fatalError` with a helpful message
+- You can override compiled values at runtime via system environment variables
+- Missing keys return `nil` for safe handling
 
 ## IDE / Linting Support
 
@@ -128,8 +136,8 @@ BetterEnv.addProvider(FileProvider(path: "/path/to/.env.production"))
 // Relative to current directory
 BetterEnv.addProvider(FileProvider.relative(".env.secrets"))
 
-// Access
-let secret = try await BetterEnv.provider(FileProvider.self).get("API_KEY")
+// Access (sync — no await needed)
+let secret = try BetterEnv.provider(FileProvider.self).get("API_KEY")
 ```
 
 ### Infisical Provider
@@ -139,8 +147,8 @@ Fetch secrets from [Infisical](https://infisical.com) using Universal Auth.
 ```swift
 import BetterEnvInfisical
 
-// Register provider at app startup
-BetterEnv.addProvider(InfisicalProvider(
+// Register async provider at app startup
+BetterEnv.addAsyncProvider(InfisicalProvider(
     url: "https://your-infisical-instance.com",
     clientId: clientId,
     clientSecret: clientSecret,
@@ -152,43 +160,56 @@ BetterEnv.addProvider(InfisicalProvider(
 // Fetch from this specific provider
 let dbPassword = try await BetterEnv.provider(InfisicalProvider.self).get("DB_PASSWORD")
 
-// Fetch from all sources (All Providers → Compile → Runtime)
+// Fetch from all sources (Providers → Runtime → Compile)
 let dbPassword = try await BetterEnv.get("DB_PASSWORD")
 ```
 
 ### Custom Providers
 
-Implement the `BetterEnvProvider` protocol to add your own secret sources:
+Implement `BetterEnvProvider` for sync sources or `BetterEnvAsyncProvider` for async sources:
 
 ```swift
 import BetterEnvCore
 
-public struct MyProvider: BetterEnvProvider {
-    public func get(_ key: String) async throws -> String? {
-        // Fetch from your secret manager
+// Sync provider (local sources)
+public struct MyFileProvider: BetterEnvProvider {
+    public func get(_ key: String) throws -> String? {
+        // Fetch from local source
     }
-    
+
+    public func getAll() throws -> [String: String] {
+        // Fetch all values
+    }
+}
+
+BetterEnv.addProvider(MyFileProvider())
+let value = try BetterEnv.provider(MyFileProvider.self).get("KEY")
+
+// Async provider (remote sources)
+public actor MyRemoteProvider: BetterEnvAsyncProvider {
+    public func get(_ key: String) async throws -> String? {
+        // Fetch from remote secret manager
+    }
+
     public func getAll() async throws -> [String: String] {
         // Fetch all secrets
     }
 }
 
-// Register
-BetterEnv.addProvider(MyProvider())
-
-// Access
-let value = try await BetterEnv.provider(MyProvider.self).get("KEY")
+BetterEnv.addAsyncProvider(MyRemoteProvider())
+let value = try await BetterEnv.provider(MyRemoteProvider.self).get("KEY")
 ```
 
 ### API Summary
 
-| Namespace | Methods | Async |
-|-----------|---------|-------|
-| `BetterEnv[key]` | subscript | No (Compile → Runtime) |
-| `BetterEnv.compile` | `get`, `getAll`, `has` | No |
-| `BetterEnv.runtime` | `get`, `getAll`, `has` | No |
-| `BetterEnv.provider(T.self)` | `get`, `getAll` | Yes |
-| `BetterEnv` | `get`, `getAll`, `has`, `addProvider`, `removeAllProviders` | Yes (get/getAll/has) |
+| Namespace | Methods | Async | Resolution |
+|-----------|---------|-------|------------|
+| `BetterEnv[key]` | subscript | No | Runtime → Compile |
+| `BetterEnv.compile` | `KEY`, `get`, `getAll`, `has` | No | Compile only |
+| `BetterEnv.runtime` | `get`, `getAll`, `has` | No | Runtime only |
+| `BetterEnv.provider(T.self)` | `get`, `getAll` | Sync or Async | Provider only |
+| `BetterEnv` | `get`, `getAll`, `has` | Yes | Providers → Runtime → Compile |
+| `BetterEnv` | `addProvider`, `addAsyncProvider`, `removeAllProviders` | No | — |
 
 ## Security Note
 

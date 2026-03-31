@@ -2,7 +2,7 @@ import Foundation
 import BetterEnvCore
 
 /// A provider that fetches secrets from Infisical using Universal Auth.
-public actor InfisicalProvider: BetterEnvProvider {
+public actor InfisicalProvider: BetterEnvAsyncProvider {
     private let url: String
     private let clientId: String
     private let clientSecret: String
