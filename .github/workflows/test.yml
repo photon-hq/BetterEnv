@@ -1,0 +1,20 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Write the .env the tests compile against
+        run: printf '%s\n' API_KEY=test_key_12345 DEBUG=true APP_NAME=BetterEnvDemo DATABASE_URL=postgres://localhost:5432/testdb > .env
+      - run: swift test
