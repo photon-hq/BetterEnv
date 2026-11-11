@@ -221,4 +221,4 @@ Environment variables from `.env` files are embedded in your compiled binary. Ma
 
 ## License
 
-MIT (Photon)
+Apache-2.0 (Photon)
